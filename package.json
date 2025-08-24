@@ -1,0 +1,12 @@
+{
+  "name": "valify-ldap-api",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node ./api/ldap-verify.js"
+  },
+  "dependencies": {
+    "ldapjs": "^3.0.0",
+    "cors": "^2.8.5"
+  }
+}
