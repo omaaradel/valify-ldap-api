@@ -41,11 +41,10 @@ export default async function handler(req, res) {
       });
     });
 
-    // Step 2: Search for user
+    // Step 2: Search for user (dynamic filter)
     const searchOptions = {
-      filter: `(&(mail=${email})(objectClass=inetOrgPerson))`,
+      filter: `(|(mail=${email})(uid=${email})(cn=${email}))`,  // <<<< CHANGED
       scope: 'sub',
-      // Request ALL possible attributes
       attributes: [
         'cn', 'displayName', 'name', 'fullName',
         'givenName', 'sn', 'firstName', 'lastName',
@@ -127,7 +126,6 @@ export default async function handler(req, res) {
     const employee = results[0];
     console.log('Processing employee attributes...');
 
-    // Safe getter functions that handle undefined/null values
     const safeName = () => {
       const candidates = [
         employee.cn,
@@ -135,10 +133,9 @@ export default async function handler(req, res) {
         employee.name,
         employee.fullName,
         `${employee.givenName || employee.firstName || ''} ${employee.sn || employee.lastName || ''}`.trim(),
-        name, // fallback to request parameter
+        name,
         'Name not available'
       ];
-      
       for (const candidate of candidates) {
         if (candidate && typeof candidate === 'string' && candidate.trim()) {
           return candidate.trim();
@@ -201,7 +198,6 @@ export default async function handler(req, res) {
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
     
-    // Ensure client is cleaned up
     try { client.unbind(); } catch (e) { /* ignore */ }
     
     return res.status(500).json({
