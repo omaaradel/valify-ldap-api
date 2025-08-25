@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
     // Step 2: Search for user
     const searchOptions = {
-      filter: `(&(mail=${email})(objectClass=inetOrgPerson))`,
+      filter: `(mail=${email})`,
       scope: 'sub',
       // Request ALL possible attributes
       attributes: [
