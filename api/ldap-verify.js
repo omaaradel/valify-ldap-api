@@ -5,23 +5,26 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
+  
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { email, name } = req.body || {};
-
+  // CRITICAL FIX: Extract uid parameter from request body
+  const { email, name, uid } = req.body || {};
+  
   if (!email) {
     return res.status(400).json({ error: 'Missing email in request body' });
   }
 
   console.log('=== LDAP SEARCH DEBUG ===');
   console.log('Searching for email:', email);
+  console.log('Searching for name:', name);
+  console.log('Searching for uid:', uid); // Added uid logging
   console.log('Environment check:');
   console.log('LDAP_SERVER:', process.env.LDAP_SERVER ? 'SET' : 'MISSING');
   console.log('LDAP_BIND_DN:', process.env.LDAP_BIND_DN ? 'SET' : 'MISSING');
@@ -51,7 +54,7 @@ export default async function handler(req, res) {
 
     // Step 2: Search for user
     const searchOptions = {
-      filter: `(|(uid=${uid})(cn=${name})(mail=${email}))`
+      filter: `(|(uid=${uid})(cn=${name})(mail=${email}))`, // CRITICAL FIX: Added missing comma
       scope: 'sub',
       // Request ALL possible attributes
       attributes: [
@@ -62,17 +65,20 @@ export default async function handler(req, res) {
         'telephoneNumber', 'phone', 'mobile', 'description', 'notes', 'comment',
       ],
     };
+
     console.log('Step 2: LDAP search starting...');
     console.log('Filter:', searchOptions.filter);
     console.log('Base DN:', process.env.LDAP_BASE_DN);
 
     const results = await new Promise((resolve, reject) => {
       const entries = [];
+      
       client.search(process.env.LDAP_BASE_DN, searchOptions, (err, search) => {
         if (err) {
           console.error('LDAP search initiation failed:', err.message);
           return reject(new Error(`LDAP search failed: ${err.message}`));
         }
+
         search.on('searchEntry', (entry) => {
           console.log('=== FOUND LDAP ENTRY ===');
           const obj = entry.object;
@@ -80,13 +86,16 @@ export default async function handler(req, res) {
           console.log('Raw entry data:', JSON.stringify(obj, null, 2));
           entries.push(obj);
         });
+
         search.on('searchReference', (referral) => {
           console.log('LDAP referral:', referral.uris);
         });
+
         search.on('error', (error) => {
           console.error('LDAP search error:', error.message);
           reject(new Error(`LDAP search error: ${error.message}`));
         });
+
         search.on('end', (result) => {
           console.log('LDAP search completed');
           console.log('Search result status:', result.status);
@@ -112,6 +121,8 @@ export default async function handler(req, res) {
         error: 'Employee not found in company directory',
         searchDetails: {
           email: email,
+          name: name,
+          uid: uid, // Added uid to search details
           filter: searchOptions.filter,
           server: process.env.LDAP_SERVER,
           baseDN: process.env.LDAP_BASE_DN,
@@ -164,15 +175,16 @@ export default async function handler(req, res) {
     };
 
     const finalEmployeeData = {
+      id: safeEmployeeId(), // CRITICAL FIX: Changed from 'employeeId' to 'id' to match frontend expectation
       name: safeName(),
       email: safeEmail(),
-      employeeId: safeEmployeeId(),
       department: safeDepartment(),
       title: safeTitle(),
       manager: safeManager(),
     };
 
     console.log('Final processed employee data:', finalEmployeeData);
+
     return res.json({
       verified: true,
       employee: finalEmployeeData,
@@ -186,9 +198,12 @@ export default async function handler(req, res) {
       debug: {
         availableAttributes: Object.keys(employee),
         searchedEmail: email,
+        searchedName: name,
+        searchedUid: uid, // Added uid to debug info
         success: true,
       },
     });
+
   } catch (error) {
     console.error('=== LDAP ERROR OCCURRED ===');
     console.error('Error type:', error.constructor.name);
@@ -201,6 +216,7 @@ export default async function handler(req, res) {
     } catch (e) {
       /* ignore */
     }
+
     return res.status(500).json({
       verified: false,
       error: 'LDAP server connection failed',
